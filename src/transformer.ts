@@ -1,5 +1,5 @@
 import {} from "ts-expose-internals";
-import ts from "typescript";
+import ts, { DiagnosticWithLocation } from "typescript";
 import path from "path";
 import { transformFile } from "./transformations/transformFile";
 import { TransformerConfig, TransformState } from "./classes/transformState";
@@ -41,7 +41,7 @@ export default function (program: ts.Program, config?: TransformerConfig) {
 					const preEmitDiagnostics = ts.getPreEmitDiagnostics(program, originalFile);
 					if (preEmitDiagnostics.some((x) => x.category === ts.DiagnosticCategory.Error)) {
 						preEmitDiagnostics
-							.filter(ts.isDiagnosticWithLocation)
+							.filter(function (d): d is DiagnosticWithLocation { return d.file !== undefined && d.start !== undefined && d.length !== undefined; })
 							.forEach((diag) => context.addDiagnostic(diag));
 						return file;
 					}

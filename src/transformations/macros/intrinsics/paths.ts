@@ -40,6 +40,10 @@ export function buildPathIntrinsic(state: TransformState, node: ts.Node, pathTyp
 
 	const outputPath = state.pathTranslator.getOutputPath(pathType.value);
 	const rbxPath = state.rojoResolver?.getRbxPathFromFilePath(outputPath);
+	
+	console.log("OUTPUT_PATH", outputPath);
+	console.log("RBX_PATH", rbxPath);
+
 	if (!rbxPath) {
 		Diagnostics.error(node, `Could not find Rojo data for '${pathType.value}'`);
 	}
