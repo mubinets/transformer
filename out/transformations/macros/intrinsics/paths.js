@@ -35,8 +35,6 @@ function buildPathIntrinsic(state, node, pathType) {
     }
     var outputPath = state.pathTranslator.getOutputPath(pathType.value);
     var rbxPath = (_a = state.rojoResolver) === null || _a === void 0 ? void 0 : _a.getRbxPathFromFilePath(outputPath);
-    console.log("OUTPUT_PATH", outputPath);
-    console.log("RBX_PATH", rbxPath);
     if (!rbxPath) {
         diagnostics_1.Diagnostics.error(node, "Could not find Rojo data for '".concat(pathType.value, "'"));
     }

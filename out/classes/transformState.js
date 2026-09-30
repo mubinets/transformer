@@ -210,7 +210,8 @@ var TransformState = /** @class */ (function () {
     TransformState.prototype.getIncludePath = function () {
         var includeArgvIndex = process.argv.findIndex(function (v) { return v === "--i" || v === "--includePath"; });
         var includePath = includeArgvIndex !== -1 ? process.argv[includeArgvIndex + 1] : undefined;
-        return path_1.default.resolve(includePath || path_1.default.join(this.rootDirectory, "include"));
+        // Matches roblox-ts, which defaults to the `include` folder next to the tsconfig, not the package.json.
+        return path_1.default.resolve(includePath || path_1.default.join(this.currentDirectory, "include"));
     };
     /**
      * Since npm modules can be symlinked, TypeScript can resolve them to their real path (outside of the project directory.)
@@ -242,7 +243,7 @@ var TransformState = /** @class */ (function () {
                 nocase: true,
             });
             globs[pathGlob] = paths.map(function (globPath) {
-                var outputPath = _this.pathTranslator.getOutputPath(globPath);
+                var outputPath = _this.pathTranslator.getOutputPath(path_1.default.resolve(_this.rootDirectory, globPath));
                 return path_1.default.relative(_this.rootDirectory, outputPath).replace(/\\/g, "/");
             });
         }

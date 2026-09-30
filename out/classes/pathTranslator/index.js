@@ -24,6 +24,17 @@ var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
     }
     return to.concat(ar || Array.prototype.slice.call(from));
 };
+var __values = (this && this.__values) || function(o) {
+    var s = typeof Symbol === "function" && Symbol.iterator, m = s && o[s], i = 0;
+    if (m) return m.call(o);
+    if (o && typeof o.length === "number") return {
+        next: function () {
+            if (o && i >= o.length) o = void 0;
+            return { value: o && o[i++], done: !o };
+        }
+    };
+    throw new TypeError(s ? "Object is not iterable." : "Symbol.iterator is not defined.");
+};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -32,6 +43,7 @@ exports.PathTranslator = exports.PathInfo = void 0;
 var path_1 = __importDefault(require("path"));
 var constants_1 = require("./constants");
 var assert_1 = require("../../util/functions/assert");
+var isPathDescendantOf_1 = require("../../util/functions/isPathDescendantOf");
 var PathInfo = /** @class */ (function () {
     function PathInfo(dirName, fileName, exts) {
         this.dirName = dirName;
@@ -57,16 +69,42 @@ var PathInfo = /** @class */ (function () {
 }());
 exports.PathInfo = PathInfo;
 var PathTranslator = /** @class */ (function () {
-    function PathTranslator(rootDir, outDir, buildInfoOutputPath, declaration) {
+    function PathTranslator(rootDir, outDir, buildInfoOutputPath, declaration, projectReferences) {
+        if (projectReferences === void 0) { projectReferences = []; }
         this.rootDir = rootDir;
         this.outDir = outDir;
         this.buildInfoOutputPath = buildInfoOutputPath;
         this.declaration = declaration;
+        this.projectReferences = projectReferences;
     }
     PathTranslator.prototype.makeRelativeFactory = function (from, to) {
         if (from === void 0) { from = this.rootDir; }
         if (to === void 0) { to = this.outDir; }
         return function (pathInfo) { return path_1.default.join(to, path_1.default.relative(from, pathInfo.join())); };
+    };
+    /**
+     * Finds the translator of the project (this one, or a referenced project) whose directory contains `filePath`.
+     */
+    PathTranslator.prototype.findProject = function (filePath, getDir) {
+        var e_1, _a;
+        if ((0, isPathDescendantOf_1.isPathDescendantOf)(path_1.default.resolve(filePath), getDir(this))) {
+            return this;
+        }
+        try {
+            for (var _b = __values(this.projectReferences), _c = _b.next(); !_c.done; _c = _b.next()) {
+                var reference = _c.value;
+                var project = reference.findProject(filePath, getDir);
+                if (project)
+                    return project;
+            }
+        }
+        catch (e_1_1) { e_1 = { error: e_1_1 }; }
+        finally {
+            try {
+                if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
+            }
+            finally { if (e_1) throw e_1.error; }
+        }
     };
     /**
      * Maps an input path to an output path
@@ -75,6 +113,9 @@ var PathTranslator = /** @class */ (function () {
      * - `src/*` -> `out/*`
      */
     PathTranslator.prototype.getOutputPath = function (filePath) {
+        var project = this.findProject(filePath, function (translator) { return translator.rootDir; });
+        if (project && project !== this)
+            return project.getOutputPath(filePath);
         var makeRelative = this.makeRelativeFactory();
         var pathInfo = PathInfo.from(filePath);
         if ((pathInfo.extsPeek() === constants_1.TS_EXT || pathInfo.extsPeek() === constants_1.TSX_EXT) && pathInfo.extsPeek(1) !== constants_1.D_EXT) {
@@ -94,6 +135,9 @@ var PathTranslator = /** @class */ (function () {
      * - `out/*` -> `src/*`
      */
     PathTranslator.prototype.getInputPaths = function (filePath) {
+        var project = this.findProject(filePath, function (translator) { return translator.outDir; });
+        if (project && project !== this)
+            return project.getInputPaths(filePath);
         var makeRelative = this.makeRelativeFactory(this.outDir, this.rootDir);
         var possiblePaths = new Array();
         var pathInfo = PathInfo.from(filePath);
@@ -143,6 +187,9 @@ var PathTranslator = /** @class */ (function () {
      */
     PathTranslator.prototype.getImportPath = function (filePath, isNodeModule) {
         if (isNodeModule === void 0) { isNodeModule = false; }
+        var project = this.findProject(filePath, function (translator) { return translator.rootDir; });
+        if (project && project !== this)
+            return project.getImportPath(filePath, isNodeModule);
         var makeRelative = this.makeRelativeFactory();
         var pathInfo = PathInfo.from(filePath);
         if (pathInfo.extsPeek() === constants_1.TS_EXT || pathInfo.extsPeek() === constants_1.TSX_EXT) {
