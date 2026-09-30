@@ -202,7 +202,8 @@ export class TransformState {
 	private getIncludePath() {
 		const includeArgvIndex = process.argv.findIndex((v) => v === "--i" || v === "--includePath");
 		const includePath = includeArgvIndex !== -1 ? process.argv[includeArgvIndex + 1] : undefined;
-		return path.resolve(includePath || path.join(this.rootDirectory, "include"));
+		// Matches roblox-ts, which defaults to the `include` folder next to the tsconfig, not the package.json.
+		return path.resolve(includePath || path.join(this.currentDirectory, "include"));
 	}
 
 	/**
@@ -244,7 +245,7 @@ export class TransformState {
 			});
 
 			globs[pathGlob] = paths.map((globPath) => {
-				const outputPath = this.pathTranslator.getOutputPath(globPath);
+				const outputPath = this.pathTranslator.getOutputPath(path.resolve(this.rootDirectory, globPath));
 				return path.relative(this.rootDirectory, outputPath).replace(/\\/g, "/");
 			});
 		}

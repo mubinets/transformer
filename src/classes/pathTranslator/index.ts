@@ -1,6 +1,7 @@
 import path from "path";
 import { D_EXT, INDEX_NAME, INIT_NAME, LUA_EXT, TSX_EXT, TS_EXT } from "./constants";
 import { assert } from "../../util/functions/assert";
+import { isPathDescendantOf } from "../../util/functions/isPathDescendantOf";
 
 export class PathInfo {
 	private constructor(public dirName: string, public fileName: string, public exts: Array<string>) {}
@@ -29,10 +30,25 @@ export class PathTranslator {
 		public readonly outDir: string,
 		public readonly buildInfoOutputPath: string | undefined,
 		public readonly declaration: boolean,
+		public readonly projectReferences: ReadonlyArray<PathTranslator> = [],
 	) {}
 
 	private makeRelativeFactory(from = this.rootDir, to = this.outDir) {
 		return (pathInfo: PathInfo) => path.join(to, path.relative(from, pathInfo.join()));
+	}
+
+	/**
+	 * Finds the translator of the project (this one, or a referenced project) whose directory contains `filePath`.
+	 */
+	private findProject(filePath: string, getDir: (translator: PathTranslator) => string): PathTranslator | undefined {
+		if (isPathDescendantOf(path.resolve(filePath), getDir(this))) {
+			return this;
+		}
+
+		for (const reference of this.projectReferences) {
+			const project = reference.findProject(filePath, getDir);
+			if (project) return project;
+		}
 	}
 
 	/**
@@ -41,7 +57,10 @@ export class PathTranslator {
 	 * 	- `index` -> `init`
 	 * - `src/*` -> `out/*`
 	 */
-	public getOutputPath(filePath: string) {
+	public getOutputPath(filePath: string): string {
+		const project = this.findProject(filePath, (translator) => translator.rootDir);
+		if (project && project !== this) return project.getOutputPath(filePath);
+
 		const makeRelative = this.makeRelativeFactory();
 		const pathInfo = PathInfo.from(filePath);
 
@@ -65,7 +84,10 @@ export class PathTranslator {
 	 * 	- `init` -> `index`
 	 * - `out/*` -> `src/*`
 	 */
-	public getInputPaths(filePath: string) {
+	public getInputPaths(filePath: string): Array<string> {
+		const project = this.findProject(filePath, (translator) => translator.outDir);
+		if (project && project !== this) return project.getInputPaths(filePath);
+
 		const makeRelative = this.makeRelativeFactory(this.outDir, this.rootDir);
 		const possiblePaths = new Array<string>();
 		const pathInfo = PathInfo.from(filePath);
@@ -124,7 +146,10 @@ export class PathTranslator {
 	 * - `.d.tsx?` -> `.tsx?` -> `.lua`
 	 * 	- `index` -> `init`
 	 */
-	public getImportPath(filePath: string, isNodeModule = false) {
+	public getImportPath(filePath: string, isNodeModule = false): string {
+		const project = this.findProject(filePath, (translator) => translator.rootDir);
+		if (project && project !== this) return project.getImportPath(filePath, isNodeModule);
+
 		const makeRelative = this.makeRelativeFactory();
 		const pathInfo = PathInfo.from(filePath);
 

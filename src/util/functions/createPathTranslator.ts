@@ -13,15 +13,54 @@ function findAncestorDir(dirs: Array<string>) {
 }
 
 function getRootDirs(compilerOptions: ts.CompilerOptions) {
-	const rootDirs = compilerOptions.rootDir ? [compilerOptions.rootDir] : compilerOptions.rootDirs;
-	if (!rootDirs) assert(false, "rootDir or rootDirs must be specified");
+	return compilerOptions.rootDir ? [compilerOptions.rootDir] : compilerOptions.rootDirs ?? [];
+}
 
-	return rootDirs;
+/**
+ * Creates translators for project references (`references` in tsconfig), such as sibling projects in a monorepo,
+ * so that paths inside a referenced project are mapped to that project's `outDir` instead of our own.
+ */
+function createReferenceTranslators(
+	references: ReadonlyArray<ts.ResolvedProjectReference | undefined> | undefined,
+): Array<PathTranslator> {
+	const translators = new Array<PathTranslator>();
+	for (const reference of references ?? []) {
+		if (!reference) continue;
+
+		const { commandLine } = reference;
+		const { options } = commandLine;
+		if (!options.outDir) continue;
+
+		const commonSourceDirectory = ts.getCommonSourceDirectoryOfConfig(
+			commandLine,
+			!ts.sys.useCaseSensitiveFileNames,
+		);
+		const rootDir = findAncestorDir([commonSourceDirectory, ...getRootDirs(options)]);
+		translators.push(
+			new PathTranslator(
+				rootDir,
+				options.outDir,
+				undefined,
+				options.declaration || false,
+				createReferenceTranslators(reference.references),
+			),
+		);
+	}
+	return translators;
 }
 
 export function createPathTranslator(program: ts.Program) {
 	const compilerOptions = program.getCompilerOptions();
-	const rootDir = findAncestorDir([program.getCommonSourceDirectory(), ...getRootDirs(compilerOptions)]);
+	const rootDirs = getRootDirs(compilerOptions);
+	if (rootDirs.length === 0) assert(false, "rootDir or rootDirs must be specified");
+
+	const rootDir = findAncestorDir([program.getCommonSourceDirectory(), ...rootDirs]);
 	const outDir = compilerOptions.outDir!;
-	return new PathTranslator(rootDir, outDir, undefined, compilerOptions.declaration || false);
+	return new PathTranslator(
+		rootDir,
+		outDir,
+		undefined,
+		compilerOptions.declaration || false,
+		createReferenceTranslators(program.getResolvedProjectReferences()),
+	);
 }
